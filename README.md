@@ -60,7 +60,7 @@ uv tool install py-lean-package
 Or install from source:
 
 ```bash
-git clone https://github.com/raphaelstolt/py-lean.git && cd py-lean
+git clone https://github.com/lean-packages/py-lean.git && cd py-lean
 uv sync
 uv run --project . py-lean --help
 ```
@@ -220,5 +220,5 @@ This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for
 
 ## Related projects
 
-- [lean-package-validator](https://github.com/raphaelstolt/lean-package-validator) — The `PHP` equivalent
-- [cargo-lean](https://github.com/raphaelstolt/cargo-lean) — The `Rust` equivalent.
+- [lean-package-validator](https://github.com/lean-packages/lean-package-validator) — The `PHP` equivalent
+- [cargo-lean](https://github.com/lean-packages/cargo-lean) — The `Rust` equivalent.

@@ -7,7 +7,7 @@ Thank you for your interest in contributing to `py-lean-package`.
 ### Installing dependencies
 
 ```bash
-git clone https://github.com/raphaelstolt/py-lean.git && cd py-lean
+git clone https://github.com/lean-packages/py-lean.git && cd py-lean
 uv sync
 ```
 
