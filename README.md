@@ -222,3 +222,4 @@ This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for
 
 - [lean-package-validator](https://github.com/lean-packages/lean-package-validator) — The `PHP` equivalent
 - [cargo-lean](https://github.com/lean-packages/cargo-lean) — The `Rust` equivalent.
+- [js-lean](https://github.com/lean-packages/js-lean) — The `JavaScript` equivalent.
