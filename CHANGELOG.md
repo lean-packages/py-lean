@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-06
+
 ### Fixed
 
 - On case-insensitive filesystems (e.g., macOS default), artifact existence checks now verify exact
