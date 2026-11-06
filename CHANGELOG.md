@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- On case-insensitive filesystems (e.g., macOS default), artifact existence checks now verify exact
+  filename matches, preventing duplicate entries like both `CHANGELOG.md` and `changelog.md` from being
+  added to the source-exclude list.
+
 ## [0.2.3] - 2026-10-31
 
 ### Fixed

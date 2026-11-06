@@ -252,6 +252,12 @@ def _artifact_exists(project_root: Path, pattern: str) -> bool:
     """Check if an artifact matching the pattern exists in the project root.
 
     Trailing slashes are stripped before checking, so `tests/` and `tests` are equivalent.
+
+    On case-insensitive filesystems (e.g., macOS default), `Path.exists()` returns
+    `True` for both `CHANGELOG.md` and `changelog.md` when only one exists.
+    This function reads the actual directory entries to verify the filename matches
+    the pattern exactly, preventing duplicate entries like both `CHANGELOG.md` and
+    `changelog.md` from being added to the exclude list.
     """
     pattern = _normalize_pattern(pattern)
 
@@ -260,9 +266,38 @@ def _artifact_exists(project_root: Path, pattern: str) -> bool:
         matches = list(project_root.glob(pattern))
         return len(matches) > 0
 
-    # Handle directory/file patterns
-    path = project_root / pattern
-    return path.exists()
+    # Handle directory/file patterns — use case-sensitive check
+    return _path_exists_exact(project_root, pattern)
+
+
+def _path_exists_exact(base: Path, pattern: str) -> bool:
+    """Check if a path exists with an exact (case-sensitive) name match.
+
+    On case-insensitive filesystems, `Path.exists()` will match case variants.
+    This function reads directory entries to verify the exact filename.
+    """
+    # Quick check: if the path doesn't exist at all (even case-insensitively), skip.
+    path = base / pattern
+    if not path.exists():
+        return False
+
+    # Split the pattern into parent directory and name
+    if "/" in pattern:
+        parent_rel, name = pattern.rsplit("/", 1)
+        search_dir = base / parent_rel
+    else:
+        search_dir = base
+        name = pattern
+
+    # Read directory entries and check for exact name match
+    try:
+        for entry in search_dir.iterdir():
+            if entry.name == name:
+                return True
+    except OSError:
+        pass
+
+    return False
 
 
 def detect_toml_configs(

@@ -12,6 +12,7 @@ from py_lean_package.analyzer import (
     _artifact_exists,
     _get_source_exclude_patterns,
     _normalize_pattern,
+    _path_exists_exact,
     _pattern_covers,
     check_build_system,
     detect_missing_source_exclude,
@@ -233,6 +234,63 @@ class TestArtifactExists:
             root = Path(tmp)
             (root / "tests").mkdir()
             assert _artifact_exists(root, "tests/") is True
+
+    def test_case_sensitive_file_check(self) -> None:
+        """Regression test: on case-insensitive filesystems, CHANGELOG.md and changelog.md
+        should not both be reported as existing when only one is present.
+
+        This test verifies the fix for the bug where Path.exists() returns True for both
+        variants on macOS, causing duplicate entries in the source-exclude list.
+        """
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Create only CHANGELOG.md
+            (root / "CHANGELOG.md").write_text("# Changelog\n")
+
+            # The exact case match should exist
+            assert _path_exists_exact(root, "CHANGELOG.md") is True
+
+            # A different case variant should NOT be reported as existing
+            assert _path_exists_exact(root, "changelog.md") is False
+
+    def test_case_sensitive_file_check_reverse(self) -> None:
+        """Same as above, but with lowercase file created."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Create only changelog.md (lowercase)
+            (root / "changelog.md").write_text("# Changelog\n")
+
+            # The exact case match should exist
+            assert _path_exists_exact(root, "changelog.md") is True
+
+            # A different case variant should NOT be reported as existing
+            assert _path_exists_exact(root, "CHANGELOG.md") is False
+
+    def test_case_sensitive_directory_check(self) -> None:
+        """Case-sensitive check should also work for directories."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Create only Tests (capital T)
+            (root / "Tests").mkdir()
+
+            # The exact case match should exist
+            assert _path_exists_exact(root, "Tests") is True
+
+            # A different case variant should NOT be reported as existing
+            assert _path_exists_exact(root, "tests") is False
+
+    def test_artifact_exists_uses_case_sensitive_check(self) -> None:
+        """_artifact_exists should use case-sensitive checks for non-glob patterns."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Create only CHANGELOG.md
+            (root / "CHANGELOG.md").write_text("# Changelog\n")
+
+            # Exact case should be found
+            assert _artifact_exists(root, "CHANGELOG.md") is True
+
+            # Different case should NOT be found
+            assert _artifact_exists(root, "changelog.md") is False
 
 
 class TestReadGitignore:
