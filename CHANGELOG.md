@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-07
+
 ### Added
 
 - `README.md` added to default exclude patterns: The lint command now checks that `README.md`
