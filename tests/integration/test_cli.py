@@ -553,6 +553,181 @@ class TestUpdateCommand:
             assert '".ruff.toml"' in content
 
 
+class TestReadmeHandling:
+    """Integration tests for README.md handling."""
+
+    def test_lint_detects_readme_in_source_exclude(self) -> None:
+        """Lint should report when README.md is in source-exclude."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [build-system]
+                    requires = ["uv_build"]
+                    build-backend = "uv_build"
+
+                    [project]
+                    name = "test"
+
+                    [tool.uv.build-backend]
+                    source-exclude = ["README.md", "tests"]
+                    """
+                )
+            )
+            (root / "tests").mkdir()
+            (root / "README.md").write_text("# My Project\n")
+
+            result = runner.invoke(app, ["lint", "-m", str(manifest)])
+            assert result.exit_code == 1
+            assert "README.md" in result.output
+            assert "project.readme" in result.output
+
+    def test_lint_detects_missing_project_readme(self) -> None:
+        """Lint should report when README.md exists but project.readme is not set."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [build-system]
+                    requires = ["uv_build"]
+                    build-backend = "uv_build"
+
+                    [project]
+                    name = "test"
+
+                    [tool.uv.build-backend]
+                    source-exclude = ["tests"]
+                    """
+                )
+            )
+            (root / "tests").mkdir()
+            (root / "README.md").write_text("# My Project\n")
+
+            result = runner.invoke(app, ["lint", "-m", str(manifest)])
+            assert result.exit_code == 1
+            assert "README.md" in result.output
+            assert "project.readme" in result.output
+
+    def test_lint_clean_when_project_readme_set(self) -> None:
+        """Lint should be clean when project.readme is set and README.md not in source-exclude."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [build-system]
+                    requires = ["uv_build"]
+                    build-backend = "uv_build"
+
+                    [project]
+                    name = "test"
+                    readme = "README.md"
+
+                    [tool.uv.build-backend]
+                    source-exclude = ["tests"]
+                    """
+                )
+            )
+            (root / "tests").mkdir()
+            (root / "README.md").write_text("# My Project\n")
+
+            result = runner.invoke(app, ["lint", "-m", str(manifest)])
+            assert result.exit_code == 0
+            assert "pyproject.toml source-exclude list is complete" in result.output
+
+    def test_create_never_adds_readme_to_source_exclude(self) -> None:
+        """Create should never add README.md to source-exclude."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [build-system]
+                    requires = ["uv_build"]
+                    build-backend = "uv_build"
+
+                    [project]
+                    name = "test"
+                    """
+                )
+            )
+            (root / "tests").mkdir()
+            (root / "README.md").write_text("# My Project\n")
+
+            result = runner.invoke(app, ["create", "-m", str(manifest)])
+            assert result.exit_code == 0
+
+            content = manifest.read_text()
+            # tests should be added
+            assert '"tests"' in content
+            # README.md should NOT be added to source-exclude
+            assert '"README.md"' not in content
+
+    def test_update_removes_readme_from_existing_source_exclude(self) -> None:
+        """Update should remove README.md from existing source-exclude."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [build-system]
+                    requires = ["uv_build"]
+                    build-backend = "uv_build"
+
+                    [project]
+                    name = "test"
+
+                    [tool.uv.build-backend]
+                    source-exclude = ["README.md", "tests"]
+                    """
+                )
+            )
+            (root / "tests").mkdir()
+            (root / "README.md").write_text("# My Project\n")
+
+            result = runner.invoke(app, ["update", "-m", str(manifest)])
+            assert result.exit_code == 0
+
+            content = manifest.read_text()
+            # tests should remain
+            assert '"tests"' in content
+            # README.md should be removed from source-exclude
+            assert '"README.md"' not in content
+
+    def test_lint_no_readme_issue_when_no_readme_file(self) -> None:
+        """Lint should not report missing project.readme when no README.md exists."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [build-system]
+                    requires = ["uv_build"]
+                    build-backend = "uv_build"
+
+                    [project]
+                    name = "test"
+
+                    [tool.uv.build-backend]
+                    source-exclude = ["tests"]
+                    """
+                )
+            )
+            (root / "tests").mkdir()
+
+            result = runner.invoke(app, ["lint", "-m", str(manifest)])
+            assert result.exit_code == 0
+            assert "pyproject.toml source-exclude list is complete" in result.output
+
+
 class TestVersion:
     """Test the version flag."""
 

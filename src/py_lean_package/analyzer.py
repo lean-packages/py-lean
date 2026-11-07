@@ -8,7 +8,13 @@ from pathlib import Path
 
 import tomlkit
 
-from py_lean_package.models import AnalysisResult, Issue, IssueType, LeanConfig
+from py_lean_package.models import (
+    AnalysisResult,
+    Issue,
+    IssueType,
+    LeanConfig,
+    _is_readme_pattern,
+)
 
 
 def read_gitignore(project_root: Path) -> list[str]:
@@ -354,14 +360,124 @@ def detect_toml_configs(
     return issues
 
 
+def detect_readme_in_source_exclude(
+    manifest: tomlkit.TOMLDocument,
+) -> list[Issue]:
+    """Detect if README.md is listed in source-exclude (should use project.readme instead).
+
+    README.md belongs in project.readme, not in source-exclude.
+    """
+    issues: list[Issue] = []
+    exclude_patterns = _get_source_exclude_patterns(manifest)
+
+    for pattern in exclude_patterns:
+        if _is_readme_pattern(pattern):
+            issues.append(
+                Issue(
+                    issue_type=IssueType.README_IN_SOURCE_EXCLUDE,
+                    subject=pattern,
+                    description=(
+                        f"README file '{pattern}' is listed in "
+                        f"tool.uv.build-backend.source-exclude, but should be specified via "
+                        f"project.readme instead."
+                    ),
+                    location="pyproject.toml",
+                    suggestion='Remove README.md from source-exclude and set project.readme = "README.md".',
+                )
+            )
+
+    return issues
+
+
+def _get_project_readme(manifest: tomlkit.TOMLDocument) -> str | None:
+    """Extract the project.readme value from the manifest.
+
+    project.readme can be:
+    - A string: readme = "README.md"
+    - A table: readme = {file = "README.md"}
+    - A list of tables (for multiple locales)
+
+    Returns the readme filename if set, None otherwise.
+    """
+    project = manifest.get("project", {})
+    if project is None:
+        return None
+    readme = project.get("readme")
+    if readme is None:
+        return None
+
+    # String form: readme = "README.md"
+    if isinstance(readme, str):
+        return readme
+
+    # Table form: readme = {file = "README.md"}
+    if hasattr(readme, "get"):
+        return readme.get("file")
+
+    # List form (multiple locales): readme = [{file = "README.md"}, ...]
+    if isinstance(readme, list) and len(readme) > 0:
+        first = readme[0]
+        if hasattr(first, "get"):
+            return first.get("file")
+        if isinstance(first, str):
+            return first
+
+    return None
+
+
+def detect_missing_project_readme(
+    manifest: tomlkit.TOMLDocument,
+    project_root: Path,
+) -> list[Issue]:
+    """Detect if README.md exists but project.readme is not set.
+
+    When README.md is present in the repository, project.readme should be set
+    so that packaging tools include it properly in the distribution.
+    """
+    issues: list[Issue] = []
+
+    # Check if README.md exists (case-insensitive check using directory listing)
+    readme_exists = False
+    readme_filename = None
+    try:
+        for entry in project_root.iterdir():
+            if entry.name.lower() == "readme.md" and entry.is_file():
+                readme_exists = True
+                readme_filename = entry.name
+                break
+    except OSError:
+        pass
+
+    if not readme_exists:
+        return issues
+
+    # Check if project.readme is set
+    project_readme = _get_project_readme(manifest)
+    if project_readme is None:
+        issues.append(
+            Issue(
+                issue_type=IssueType.MISSING_PROJECT_README,
+                subject=readme_filename or "README.md",
+                description=(
+                    f"README file '{readme_filename}' exists in the repository, but "
+                    f"project.readme is not set in pyproject.toml."
+                ),
+                location="pyproject.toml",
+                suggestion=f'Set project.readme = "{readme_filename}" in pyproject.toml.',
+            )
+        )
+
+    return issues
+
+
 def analyze(
     manifest_path: Path,
     patterns: list[str] | None = None,
 ) -> AnalysisResult:
     """Run full analysis on a project.
 
-    Checks for missing source-exclude patterns for common repository artefacts
-    and TOML configuration files.
+    Checks for missing source-exclude patterns for common repository artefacts,
+    TOML configuration files, and README.md handling.
     Artefacts already covered by .gitignore (local or global) are skipped.
 
     Args:
@@ -383,5 +499,7 @@ def analyze(
     issues: list[Issue] = []
     issues.extend(detect_missing_source_exclude(manifest, project_root, config, gitignore_entries))
     issues.extend(detect_toml_configs(manifest, project_root, gitignore_entries))
+    issues.extend(detect_readme_in_source_exclude(manifest))
+    issues.extend(detect_missing_project_readme(manifest, project_root))
 
     return AnalysisResult(manifest_path=manifest_path, issues=issues)

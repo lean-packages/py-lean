@@ -11,6 +11,8 @@ class IssueType(StrEnum):
     """Types of issues that py-lean can detect."""
 
     MISSING_SOURCE_EXCLUDE = "missing_source_exclude"
+    README_IN_SOURCE_EXCLUDE = "readme_in_source_exclude"
+    MISSING_PROJECT_README = "missing_project_readme"
 
 
 class OutputFormat(StrEnum):
@@ -64,6 +66,11 @@ class AnalysisResult:
         }
 
 
+def _is_readme_pattern(pattern: str) -> bool:
+    """Check if a pattern is a README file (case-insensitive)."""
+    return pattern.lower() == "readme.md"
+
+
 # Default artifact patterns that should typically be excluded from builds.
 # These are common repository artefacts that should not end up in wheels or sdists.
 DEFAULT_SOURCE_EXCLUDE_PATTERNS: list[str] = [
@@ -87,6 +94,7 @@ DEFAULT_SOURCE_EXCLUDE_PATTERNS: list[str] = [
     ".coverage",
     "htmlcov",
     ".ruff_cache",
+    "README.md",
 ]
 
 

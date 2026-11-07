@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- `README.md` added to default exclude patterns: The lint command now checks that `README.md`
+  is not listed in `source-exclude` (it should be specified via `project.readme` instead)
+  and reports an error if it is. Additionally, the lint command verifies that `project.readme`
+  is set when `README.md` exists in the repository.
+
+### Fixed
+
+- `create` and `update` commands never add `README.md` to `source-exclude`: README files belong
+  in `project.readme`, not `source-exclude`. The `update` command will also remove any existing
+  `README.md` entry from `source-exclude`.
+
 ## [0.2.4] - 2026-11-06
 
 ### Fixed
