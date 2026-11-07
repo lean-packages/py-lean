@@ -10,19 +10,27 @@ import tomlkit
 
 from py_lean_package.analyzer import (
     _artifact_exists,
+    _get_project_readme,
     _get_source_exclude_patterns,
     _normalize_pattern,
     _path_exists_exact,
     _pattern_covers,
     check_build_system,
+    detect_missing_project_readme,
     detect_missing_source_exclude,
+    detect_readme_in_source_exclude,
     detect_toml_configs,
     is_gitignored,
     load_config,
     load_manifest,
     read_gitignore,
 )
-from py_lean_package.models import DEFAULT_SOURCE_EXCLUDE_PATTERNS, LeanConfig
+from py_lean_package.models import (
+    DEFAULT_SOURCE_EXCLUDE_PATTERNS,
+    IssueType,
+    LeanConfig,
+    _is_readme_pattern,
+)
 
 
 def _gitignore_entries(root: Path) -> list[str]:
@@ -816,4 +824,232 @@ class TestDetectTomlConfigs:
             (root / "subdir" / ".ruff.toml").write_text("line-length = 88\n")
             doc = load_manifest(manifest)
             issues = detect_toml_configs(doc, root)
+            assert len(issues) == 0
+
+
+class TestIsReadmePattern:
+    """Tests for _is_readme_pattern."""
+
+    def test_readme_md_exact(self) -> None:
+        assert _is_readme_pattern("README.md") is True
+
+    def test_readme_md_lowercase(self) -> None:
+        assert _is_readme_pattern("readme.md") is True
+
+    def test_readme_md_mixed_case(self) -> None:
+        assert _is_readme_pattern("Readme.md") is True
+
+    def test_not_readme(self) -> None:
+        assert _is_readme_pattern("CHANGELOG.md") is False
+
+    def test_readme_rst(self) -> None:
+        assert _is_readme_pattern("README.rst") is False
+
+
+class TestDetectReadmeInSourceExclude:
+    """Tests for detect_readme_in_source_exclude."""
+
+    def test_detects_readme_in_source_exclude(self) -> None:
+        """Should report when README.md is in source-exclude."""
+        content = textwrap.dedent(
+            """
+            [project]
+            name = "test"
+
+            [tool.uv.build-backend]
+            source-exclude = ["README.md", "tests"]
+            """
+        )
+        doc = tomlkit.parse(content)
+        issues = detect_readme_in_source_exclude(doc)
+        assert len(issues) == 1
+        assert issues[0].issue_type == IssueType.README_IN_SOURCE_EXCLUDE
+        assert issues[0].subject == "README.md"
+
+    def test_no_issue_when_readme_not_in_source_exclude(self) -> None:
+        """Should not report when README.md is not in source-exclude."""
+        content = textwrap.dedent(
+            """
+            [project]
+            name = "test"
+
+            [tool.uv.build-backend]
+            source-exclude = ["tests", "docs"]
+            """
+        )
+        doc = tomlkit.parse(content)
+        issues = detect_readme_in_source_exclude(doc)
+        assert len(issues) == 0
+
+    def test_no_issue_when_no_source_exclude(self) -> None:
+        """Should not report when no source-exclude is configured."""
+        doc = tomlkit.parse('[project]\nname = "test"')
+        issues = detect_readme_in_source_exclude(doc)
+        assert len(issues) == 0
+
+    def test_detects_lowercase_readme(self) -> None:
+        """Should detect lowercase readme.md in source-exclude."""
+        content = textwrap.dedent(
+            """
+            [project]
+            name = "test"
+
+            [tool.uv.build-backend]
+            source-exclude = ["readme.md"]
+            """
+        )
+        doc = tomlkit.parse(content)
+        issues = detect_readme_in_source_exclude(doc)
+        assert len(issues) == 1
+        assert issues[0].subject == "readme.md"
+
+
+class TestGetProjectReadme:
+    """Tests for _get_project_readme."""
+
+    def test_string_readme(self) -> None:
+        """Should extract string form of project.readme."""
+        content = textwrap.dedent(
+            """
+            [project]
+            name = "test"
+            readme = "README.md"
+            """
+        )
+        doc = tomlkit.parse(content)
+        assert _get_project_readme(doc) == "README.md"
+
+    def test_table_readme(self) -> None:
+        """Should extract table form of project.readme."""
+        content = textwrap.dedent(
+            """
+            [project]
+            name = "test"
+
+            [project.readme]
+            file = "README.md"
+            """
+        )
+        doc = tomlkit.parse(content)
+        assert _get_project_readme(doc) == "README.md"
+
+    def test_no_readme(self) -> None:
+        """Should return None when project.readme is not set."""
+        content = textwrap.dedent(
+            """
+            [project]
+            name = "test"
+            """
+        )
+        doc = tomlkit.parse(content)
+        assert _get_project_readme(doc) is None
+
+    def test_no_project_section(self) -> None:
+        """Should return None when no project section exists."""
+        doc = tomlkit.parse("")
+        assert _get_project_readme(doc) is None
+
+
+class TestDetectMissingProjectReadme:
+    """Tests for detect_missing_project_readme."""
+
+    def test_detects_missing_project_readme(self) -> None:
+        """Should report when README.md exists but project.readme is not set."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [project]
+                    name = "test"
+                    """
+                )
+            )
+            (root / "README.md").write_text("# My Project\n")
+
+            doc = load_manifest(manifest)
+            issues = detect_missing_project_readme(doc, root)
+            assert len(issues) == 1
+            assert issues[0].issue_type == IssueType.MISSING_PROJECT_README
+            assert issues[0].subject == "README.md"
+
+    def test_no_issue_when_project_readme_set(self) -> None:
+        """Should not report when project.readme is set."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [project]
+                    name = "test"
+                    readme = "README.md"
+                    """
+                )
+            )
+            (root / "README.md").write_text("# My Project\n")
+
+            doc = load_manifest(manifest)
+            issues = detect_missing_project_readme(doc, root)
+            assert len(issues) == 0
+
+    def test_no_issue_when_readme_not_exists(self) -> None:
+        """Should not report when README.md doesn't exist."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [project]
+                    name = "test"
+                    """
+                )
+            )
+
+            doc = load_manifest(manifest)
+            issues = detect_missing_project_readme(doc, root)
+            assert len(issues) == 0
+
+    def test_detects_lowercase_readme(self) -> None:
+        """Should detect lowercase readme.md."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [project]
+                    name = "test"
+                    """
+                )
+            )
+            (root / "readme.md").write_text("# My Project\n")
+
+            doc = load_manifest(manifest)
+            issues = detect_missing_project_readme(doc, root)
+            assert len(issues) == 1
+            assert issues[0].subject == "readme.md"
+
+    def test_no_issue_when_project_readme_set_table_form(self) -> None:
+        """Should not report when project.readme is set in table form."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "pyproject.toml"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    [project]
+                    name = "test"
+
+                    [project.readme]
+                    file = "README.md"
+                    """
+                )
+            )
+            (root / "README.md").write_text("# My Project\n")
+
+            doc = load_manifest(manifest)
+            issues = detect_missing_project_readme(doc, root)
             assert len(issues) == 0

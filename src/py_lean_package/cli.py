@@ -10,8 +10,18 @@ import tomlkit
 import typer
 
 from py_lean_package import __version__
-from py_lean_package.analyzer import _get_source_exclude_patterns, analyze, check_build_system, load_manifest
-from py_lean_package.models import DEFAULT_SOURCE_EXCLUDE_PATTERNS, IssueType, OutputFormat
+from py_lean_package.analyzer import (
+    _get_source_exclude_patterns,
+    analyze,
+    check_build_system,
+    load_manifest,
+)
+from py_lean_package.models import (
+    DEFAULT_SOURCE_EXCLUDE_PATTERNS,
+    IssueType,
+    OutputFormat,
+    _is_readme_pattern,
+)
 
 app = typer.Typer(
     name="py-lean",
@@ -162,10 +172,13 @@ def cmd_create(
     current = list(bb.get("source-exclude", []))
 
     # Add only the missing patterns that exist in the repo
+    # Filter out README.md — it belongs in project.readme, not source-exclude
     added = 0
     for issue in result.issues:
         if issue.issue_type == IssueType.MISSING_SOURCE_EXCLUDE:
             pattern = issue.subject
+            if _is_readme_pattern(pattern):
+                continue
             if pattern not in current:
                 current.append(pattern)
                 added += 1
@@ -249,13 +262,20 @@ def cmd_update(
     current = list(bb.get("source-exclude", []))
 
     # Add only the missing patterns that exist in the repo
+    # Also remove any README patterns already in source-exclude
+    # Filter out README.md — it belongs in project.readme, not source-exclude
     added = 0
     for issue in result.issues:
         if issue.issue_type == IssueType.MISSING_SOURCE_EXCLUDE:
             pattern = issue.subject
+            if _is_readme_pattern(pattern):
+                continue
             if pattern not in current:
                 current.append(pattern)
                 added += 1
+
+    # Remove README.md from existing source-exclude if present
+    current = [p for p in current if not _is_readme_pattern(p)]
 
     bb["source-exclude"] = current
     new_content = tomlkit.dumps(manifest)
@@ -291,6 +311,8 @@ def _issue_icon(issue_type: IssueType) -> str:
     """Get a display icon for an issue type."""
     icons = {
         IssueType.MISSING_SOURCE_EXCLUDE: "✕",
+        IssueType.README_IN_SOURCE_EXCLUDE: "✕",
+        IssueType.MISSING_PROJECT_README: "⚠",
     }
     return icons.get(issue_type, "?")
 
