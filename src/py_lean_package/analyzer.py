@@ -382,7 +382,7 @@ def detect_readme_in_source_exclude(
                         f"project.readme instead."
                     ),
                     location="pyproject.toml",
-                    suggestion="Remove README.md from source-exclude and set project.readme = \"README.md\".",
+                    suggestion='Remove README.md from source-exclude and set project.readme = "README.md".',
                 )
             )
 
