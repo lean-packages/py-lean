@@ -223,3 +223,4 @@ This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for
 - [php-lean](https://github.com/lean-packages/php-lean) — The `PHP` counterpart.
 - [cargo-lean](https://github.com/lean-packages/cargo-lean) — The `Rust` equivalent.
 - [js-lean](https://github.com/lean-packages/js-lean) — The `JavaScript` equivalent.
+- [zig-lean](https://github.com/lean-packages/zig-lean) — The `Zig` equivalent.
